@@ -3,6 +3,7 @@ package hashring
 import (
 	"crypto/md5"
 	"fmt"
+	"github.com/spaolacci/murmur3"
 	"math"
 	"sort"
 )
@@ -135,8 +136,9 @@ func (h *HashRing) GetNodePos(stringKey string) (pos int, ok bool) {
 }
 
 func (h *HashRing) GenKey(key string) HashKey {
-	bKey := hashDigest(key)
-	return hashVal(bKey[0:4])
+	//bKey := hashDigest(key)
+	//return hashVal(bKey[0:4])
+	return HashKey(murmur3.Sum32([]byte(key)))
 }
 
 func (h *HashRing) GetNodes(stringKey string, size int) (nodes []string, ok bool) {
