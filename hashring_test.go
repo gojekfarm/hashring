@@ -1,8 +1,13 @@
 package hashring
 
 import (
+	"bytes"
+	"fmt"
+	"io/ioutil"
 	"reflect"
+	"runtime"
 	"testing"
+	"time"
 )
 
 func expectNode(t *testing.T, hashRing *HashRing, key string, expectedNode string) {
@@ -499,4 +504,203 @@ func BenchmarkHashesSingle(b *testing.B) {
 		o := tt[i%len(tt)]
 		hashRing.GetNode(o.key)
 	}
+}
+
+// Test Weights distribution
+// Test Hashing Distribution on various datatypes ID Location
+// Performance test
+func TestSimpleHashRing(t *testing.T) {
+	serversInRing := []string{"192.168.0.246:11212",
+		"192.168.0.247:11212",
+		"192.168.0.248:11212",
+		"192.168.0.249:11212",
+		"192.168.0.250:11212",
+		"192.168.0.251:11212",
+		"192.168.0.252:11212"}
+
+	ring := New(serversInRing)
+
+	var results []string
+
+	times := 1000000
+	for i := 0; i < times; i++ {
+		server, _ := ring.GetNode(string(i))
+		results = append(results, server)
+	}
+	for i := 0; i < times; i++ {
+		server, _ := ring.GetNode(string(i))
+		if server != results[i] {
+			t.Fatalf("Failure in comparison %s, %s", server, results[i])
+		}
+	}
+
+}
+
+func bToMb(b uint64) uint64 {
+	return b / 1024 / 1024
+}
+
+func PrintMemUsage() {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	// For info on each, see: https://golang.org/pkg/runtime/#MemStats
+	fmt.Printf("Alloc = %v MiB", bToMb(m.Alloc))
+	fmt.Printf("\tTotalAlloc = %v MiB", bToMb(m.TotalAlloc))
+	fmt.Printf("\tSys = %v MiB", bToMb(m.Sys))
+	fmt.Printf("\tNumGC = %v\n", m.NumGC)
+}
+
+func TestSimpleHashRingCompareMultipleRuns(t *testing.T) {
+	serversInRing := []string{"192.168.0.246:11212",
+		"192.168.0.247:11212",
+		"192.168.0.248:11212",
+		"192.168.0.249:11212",
+		"192.168.0.250:11212",
+		"192.168.0.251:11212",
+		"192.168.0.252:11212"}
+
+	ring := New(serversInRing)
+
+	var buffer bytes.Buffer
+
+	times := 10000
+	for i := 0; i < times; i++ {
+		server, _ := ring.GetNode(string(i))
+		buffer.WriteString(fmt.Sprintf("%s\n", server))
+	}
+	bytes1 := buffer.Bytes()
+	ioutil.WriteFile("/tmp/dat1", bytes1, 0644)
+
+	var nBuffer bytes.Buffer
+	for i := 0; i < times; i++ {
+		server, _ := ring.GetNode(string(i))
+		nBuffer.WriteString(fmt.Sprintf("%s\n", server))
+	}
+	bytes2 := nBuffer.Bytes()
+	ioutil.WriteFile("/tmp/dat2", bytes2, 0644)
+
+	if !bytes.Equal(bytes1, bytes2) {
+		t.Fatal("Failure in comparison of bytes")
+	}
+}
+
+func TestSimpleHashRingTiming(t *testing.T) {
+	serversInRing := []string{"192.168.0.246:11212",
+		"192.168.0.247:11212",
+		"192.168.0.248:11212",
+		"192.168.0.249:11212",
+		"192.168.0.250:11212",
+		"192.168.0.251:11212",
+		"192.168.0.252:11212"}
+
+	ring := New(serversInRing)
+
+	times := 10000000
+	start := time.Now()
+	for i := 0; i < times; i++ {
+		ring.GetNode(string(i))
+	}
+	elapsed := time.Since(start)
+	startSecond := time.Now()
+	for i := 0; i < times; i++ {
+		ring.GetNode(string(i))
+	}
+	elapsedSecond := time.Since(startSecond)
+
+	fmt.Printf("first elapsed %v, second elapsed %v", elapsed, elapsedSecond)
+}
+
+func TestSimpleHashRingMemoryUsage(t *testing.T) {
+	serversInRing := []string{"192.168.0.246:11212",
+		"192.168.0.247:11212",
+		"192.168.0.248:11212",
+		"192.168.0.249:11212",
+		"192.168.0.250:11212",
+		"192.168.0.251:11212",
+		"192.168.0.252:11212"}
+
+	ring := New(serversInRing)
+
+	times := 100000000
+	PrintMemUsage()
+	for i := 0; i < times; i++ {
+		ring.GetNode(string(i))
+	}
+	PrintMemUsage()
+	for i := 0; i < times; i++ {
+		ring.GetNode(string(i))
+	}
+	PrintMemUsage()
+}
+
+func TestShouldHandleWeights(t *testing.T) {
+	ring := NewWithWeights(map[string]int{"a": 1}).
+		AddWeightedNode("b", 1).
+		AddWeightedNode("c", 1).
+		AddWeightedNode("d", 1)
+	times := 20
+	var results []string
+	for i := 0; i < times; i++ {
+		server, _ := ring.GetNode(string(i))
+		pos, _ := ring.GetNodePos(string(i))
+		results = append(results, fmt.Sprintf("%d : %s : %d", i, server, pos))
+	}
+	ring = ring.RemoveNode("d").AddWeightedNode("d1", 1).AddWeightedNode("d2", 1)
+	var buffer bytes.Buffer
+	for i := 0; i < times; i++ {
+		server, _ := ring.GetNode(string(i))
+		pos, _ := ring.GetNodePos(string(i))
+		buffer.WriteString(fmt.Sprintf("%s - %s - %d\n", results[i], server, pos))
+	}
+
+	fmt.Println(buffer.String())
+}
+
+func TestShouldHandleWeights2(t *testing.T) {
+	ring := New([]string{
+		"1",
+		"2",
+		"3",
+		"4",
+		"5",
+		"6",
+		"7",
+		"8",
+		"9",
+		"10",
+	})
+
+	//	a: [0-500],
+	//	b: [500-749],
+	//	c: [750-100]
+	serverMap := map[string]string{
+		"1":  "a",
+		"2":  "a",
+		"3":  "a",
+		"4":  "a",
+		"5":  "a",
+		"6":  "b",
+		"7":  "b",
+		"8":  "b",
+		"9":  "c",
+		"10": "c",
+	}
+
+	times := 1000
+	serverData := map[string]int{"a": 0, "b": 0, "c": 0}
+	var results []string
+	for i := 0; i < times; i++ {
+		server, _ := ring.GetNode(string(i))
+		results = append(results, fmt.Sprintf("%d : %s", i, serverMap[server]))
+		serverData[serverMap[server]] = serverData[serverMap[server]] + 1
+	}
+
+	var buffer bytes.Buffer
+	for i := 0; i < times; i++ {
+		server, _ := ring.GetNode(string(i))
+		buffer.WriteString(fmt.Sprintf("%s - %s\n", results[i], serverMap[server]))
+	}
+
+	fmt.Println(serverData)
+	fmt.Println(buffer.String())
 }
