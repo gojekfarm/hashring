@@ -6,10 +6,12 @@ import (
 	"io/ioutil"
 	"reflect"
 	"runtime"
+	"strconv"
 	"testing"
 	"time"
 )
 
+// Param: expect functions will not work. They assume the old hash function.
 func expectNode(t *testing.T, hashRing *HashRing, key string, expectedNode string) {
 	node, ok := hashRing.GetNode(key)
 	if !ok || node != expectedNode {
@@ -598,12 +600,12 @@ func TestSimpleHashRingTiming(t *testing.T) {
 	times := 10000000
 	start := time.Now()
 	for i := 0; i < times; i++ {
-		ring.GetNode(string(i))
+		ring.GetNode(strconv.Itoa(i))
 	}
 	elapsed := time.Since(start)
 	startSecond := time.Now()
 	for i := 0; i < times; i++ {
-		ring.GetNode(string(i))
+		ring.GetNode(strconv.Itoa(i))
 	}
 	elapsedSecond := time.Since(startSecond)
 
@@ -690,17 +692,55 @@ func TestShouldHandleWeights2(t *testing.T) {
 	serverData := map[string]int{"a": 0, "b": 0, "c": 0}
 	var results []string
 	for i := 0; i < times; i++ {
-		server, _ := ring.GetNode(string(i))
+		server, _ := ring.GetNode(strconv.Itoa(i))
 		results = append(results, fmt.Sprintf("%d : %s", i, serverMap[server]))
 		serverData[serverMap[server]] = serverData[serverMap[server]] + 1
 	}
 
 	var buffer bytes.Buffer
 	for i := 0; i < times; i++ {
-		server, _ := ring.GetNode(string(i))
+		server, _ := ring.GetNode(strconv.Itoa(i))
 		buffer.WriteString(fmt.Sprintf("%s - %s\n", results[i], serverMap[server]))
 	}
 
 	fmt.Println(serverData)
 	fmt.Println(buffer.String())
+}
+
+func TestSimpleDistribution(t *testing.T) {
+	serversInRing := []string{
+		"a",
+		"b",
+		"c",
+		"d",
+		"e",
+		"f",
+		"g",
+		"h",
+		"i",
+		"j",
+	}
+
+	ring := New(serversInRing)
+
+	times := 10000000
+
+	totals := map[string]int{"a": 0,
+		"b": 0,
+		"c": 0,
+		"d": 0,
+		"e": 0,
+		"f": 0,
+		"g": 0,
+		"h": 0,
+		"i": 0,
+		"j": 0,
+	}
+
+	for i := 0; i < times; i++ {
+		result, _ := ring.GetNode(strconv.Itoa(i))
+		totals[result] = totals[result] + 1
+	}
+
+	t.Logf("%v", totals)
 }
