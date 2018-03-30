@@ -84,6 +84,35 @@ func TestSimpleAddServer(t *testing.T) {
 	}
 }
 
+func TestAddServerWithOverlap(t *testing.T) {
+	cluster := NewHashRingCluster(100)
+	cluster.AddServer("server1", "0-99")
+	cluster.AddServer("server2", "50-99")
+	server1Info := cluster.GetServerInfo("server1")
+	server2Info := cluster.GetServerInfo("server2")
+
+	if len(server1Info.virtualNodes) != 50 {
+		t.Errorf("Server1 doesnt have correct number of virtualNodes %d->%d", len(server1Info.virtualNodes), 50)
+	}
+
+	if len(server2Info.virtualNodes) != 50 {
+		t.Errorf("Server2 doesnt have correct number of virtualNodes %d->%d", len(server2Info.virtualNodes), 50)
+	}
+
+	for _, vnode := range server1Info.virtualNodes {
+		if vnode.serverInfo != server1Info {
+			t.Errorf("Virtual node not setup properly server1 -> %s", vnode.serverInfo.name)
+		}
+	}
+
+	for _, vnode := range server2Info.virtualNodes {
+		if vnode.serverInfo != server2Info {
+			t.Errorf("Virtual node not setup properly server2 -> %s", vnode.serverInfo.name)
+		}
+	}
+
+}
+
 func TestAddServerInvalidRange(t *testing.T) {
 	cluster := NewHashRingCluster(100)
 	if cluster.AddServer("server1", "99-0") == nil {
