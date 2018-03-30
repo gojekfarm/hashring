@@ -66,6 +66,16 @@ func parseRange(r string) (start, end int, err error) {
 	return
 }
 
+func removeVirtualNode(vnodes []*VirtualNodeInfo, idx int) []*VirtualNodeInfo {
+	i := 0
+	for i = 0; i < len(vnodes); i++ {
+		if vnodes[i].idx == idx {
+			break
+		}
+	}
+	return append(vnodes[:i], vnodes[i+1:]...)
+}
+
 /*AddServer
   rangeString: a-b where a and b are integers >= 0
 */
@@ -86,7 +96,12 @@ func (hc *HashRingCluster) AddServer(name string, rangeString string) error {
 	hc.servers = append(hc.servers, server)
 
 	for i := start; i <= end; i++ {
+		if hc.virtualNodes[i].serverInfo != nil {
+			oldServerInfo := hc.virtualNodes[i].serverInfo
+			oldServerInfo.virtualNodes = removeVirtualNode(oldServerInfo.virtualNodes, i)
+		}
 		hc.virtualNodes[i].serverInfo = server
+
 		server.virtualNodes = append(server.virtualNodes, hc.virtualNodes[i])
 		hc.virtualToServerMapping[hc.virtualNodes[i].name] = server
 	}
@@ -123,9 +138,7 @@ func (hc *HashRingCluster) Split(serverName string, newServerName string) error 
 
 	halfVNodes := int(numVNodes / 2)
 
-	serverInfo.virtualNodes = serverInfo.virtualNodes[0:halfVNodes]
-
-	// AddServer is an overwrite
+	// AddServer is an overwrite with cleanup
 	hc.AddServer(newServerName, fmt.Sprintf("%d-%d", halfVNodes, numVNodes-1))
 	return nil
 }
